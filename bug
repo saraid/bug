@@ -1,0 +1,86 @@
+#!/usr/bin/env ruby
+
+require 'rubygems'
+require 'active_resource'
+require 'yaml'
+
+COLOR = {
+    :red => "\e[#31m",
+    :green => "\e[#32m",
+    :yellow => "\e[#33m",
+    :blue => "\e[#34m",
+    :magenta => "\e[#35m",
+    :cyan => "\e[#36m"
+    }
+
+CONFIG_FILE = "#{Dir.home}/.bugsrc"
+FILENAME = "#{Dir.home}/.bugs"
+
+command = ARGV.shift
+File.open(CONFIG_FILE, 'w') do |f| f.write(YAML.dump({ :user => ARGV[0], :password => ARGV[1], :site => ARGV[2] })) end and exit if command == 'config'
+
+$config = begin
+  YAML.load_file(CONFIG_FILE)
+rescue Errno::ENOENT
+  puts "You don't have a user/pass configured. Use \"bug config [user] [pass] [site]\""
+  exit
+end
+
+class Issue < ActiveResource::Base
+  self.site = $config[:site]
+  self.user = $config[:user]
+  self.password = $config[:password]
+
+  def formatted_status
+    color = case status.name
+      when 'New'
+        :red
+      when 'Needs Repro'
+        :cyan
+      when 'In Progress'
+        :red
+      when 'Resolved'
+        :green
+      when 'Closed'
+        :green
+      when 'Will Not Fix'
+        :green
+    end
+    "#{COLOR[color]}#{"%12s" % status.name}\e[0m"
+  end
+
+  def change_status status_id, notes
+    self.status_id = status_id
+    self.notes = notes if notes
+    self.save
+  end
+end
+
+case command
+when 'open'
+  ARGV.each do |id| IO.popen("open #{Issue.site}/issues/#{id}") end
+when 'status'
+  ids = File.open(FILENAME, 'r') do |f| f.readlines end
+  ids.sort.each do |id|
+    issue = Issue.find(id.to_i, :params => { :include => 'journals' })
+    puts "#{issue.id} #{"%2d" % issue.journals.length} #{issue.formatted_status} #{issue.subject}"
+  end
+when 'add'
+  ids = File.open(FILENAME, 'r') do |f| f.readlines.collect { |line| line.chomp } end
+  ids = ids + ARGV.reject do |id| ids.include? id end
+  File.open(FILENAME, 'w') do |f| ids.each do |id| f.puts id end end
+when 'remove'
+  ids = File.open(FILENAME, 'r') do |f| f.readlines.collect { |line| line.chomp } end
+  ids.reject do |id| ARGV.include? id end
+  File.open(FILENAME, 'w') do |f| ids.each do |id| f.puts id end end
+when 'clear'
+  File.open(FILENAME, 'w') do |f| end
+when 'fixed'
+  issue = Issue.find(ARGV[0].to_i).change_status 3, ARGV[1]
+when 'repro'
+  issue = Issue.find(ARGV[0].to_i).change_status 1, ARGV[1]
+when 'later'
+  issue = Issue.find(ARGV[0].to_i).change_status 2, ARGV[1]
+when 'nofix'
+  issue = Issue.find(ARGV[0].to_i).change_status 6, ARGV[1]
+end
