@@ -123,7 +123,7 @@ case command
 when 'open'
   ARGV.each do |id| IO.popen("open #{Issue.site}/issues/#{id}") end
 when 'sync'
-  Issue.list.each do |id|
+  (ARGV || Issue.list).each do |id|
     Issue.find(id.to_i, :params => { :include => 'journals' }).serialize!
   end
 when 'status'
