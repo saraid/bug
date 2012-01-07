@@ -15,7 +15,17 @@ COLOR = {
     }
 
 CONFIG_FILE = "#{Dir.home}/.bugsrc"
-FILENAME = "#{Dir.home}/.bugs"
+DIRECTORY = "#{Dir.home}/.bugs"
+
+# Migrate from .bugs file to .bugs directory.
+if File.exists?(DIRECTORY) && File.ftype(DIRECTORY) == 'file'
+  ids = File.open(DIRECTORY, 'r') do |f| f.readlines.collect { |line| line.chomp } end
+  File.delete DIRECTORY
+end
+Dir.mkdir DIRECTORY unless Dir.exist? DIRECTORY
+ids.each do |id|
+  File.new("#{DIRECTORY}/#{id}", 'w')
+end unless ids.nil?
 
 command = ARGV.shift
 File.open(CONFIG_FILE, 'w') do |f| f.write(YAML.dump({ :user => ARGV[0], :password => ARGV[1], :site => ARGV[2] })) end and exit if command == 'config'
@@ -31,6 +41,13 @@ class Issue < ActiveResource::Base
   self.site = $config[:site]
   self.user = $config[:user]
   self.password = $config[:password]
+
+  def self.list
+    @@list if defined? @@list
+    @@list = Dir.entries(DIRECTORY)
+    2.times do @@list.shift end
+    @@list
+  end
 
   def formatted_status
     color = case status.name
@@ -57,25 +74,21 @@ class Issue < ActiveResource::Base
   end
 end
 
+
 case command
 when 'open'
   ARGV.each do |id| IO.popen("open #{Issue.site}/issues/#{id}") end
 when 'status'
-  ids = File.open(FILENAME, 'r') do |f| f.readlines end
-  ids.sort.each do |id|
+  Issue.list.each do |id|
     issue = Issue.find(id.to_i, :params => { :include => 'journals' })
     puts "#{issue.id} #{"%2d" % issue.journals.length} #{"%6s" % issue.priority.name} #{issue.formatted_status} #{issue.subject}"
   end
 when 'add'
-  ids = File.open(FILENAME, 'r') do |f| f.readlines.collect { |line| line.chomp } end
-  ids = ids + ARGV.reject do |id| ids.include? id end
-  File.open(FILENAME, 'w') do |f| ids.each do |id| f.puts id end end
+  ARGV.reject { |id| Issue.list.include? id }.each { |id| File.new("#{DIRECTORY}/#{id}", 'w') }
 when 'remove'
-  ids = File.open(FILENAME, 'r') do |f| f.readlines.collect { |line| line.chomp } end
-  ids.reject do |id| ARGV.include? id end
-  File.open(FILENAME, 'w') do |f| ids.each do |id| f.puts id end end
+  ARGV.each { |id| File.delete("#{DIRECTORY}/#{id}") }
 when 'clear'
-  File.open(FILENAME, 'w') do |f| end
+  Issue.list.each { |id| File.delete("#{DIRECTORY}/#{id}") }
 when 'fixed'
   id = ARGV[0].to_i
   pushed_upstream = IO.popen("git log --grep \"BUG.*#{id}:\" --oneline origin/master") do |f| f.readlines.length > 0 end
