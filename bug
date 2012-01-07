@@ -5,6 +5,7 @@ require 'active_resource'
 require 'yaml'
 
 COLOR = {
+    :clear => "\e[0m",
     :red => "\e[#31m",
     :green => "\e[#32m",
     :yellow => "\e[#33m",
@@ -46,7 +47,7 @@ class Issue < ActiveResource::Base
       when 'Will Not Fix'
         :green
     end
-    "#{COLOR[color]}#{"%12s" % status.name}\e[0m"
+    "#{COLOR[color]}#{"%12s" % status.name}#{COLOR[:clear]}"
   end
 
   def change_status status_id, notes
@@ -63,7 +64,7 @@ when 'status'
   ids = File.open(FILENAME, 'r') do |f| f.readlines end
   ids.sort.each do |id|
     issue = Issue.find(id.to_i, :params => { :include => 'journals' })
-    puts "#{issue.id} #{"%2d" % issue.journals.length} #{issue.formatted_status} #{issue.subject}"
+    puts "#{issue.id} #{"%2d" % issue.journals.length} #{"%6s" % issue.priority.name} #{issue.formatted_status} #{issue.subject}"
   end
 when 'add'
   ids = File.open(FILENAME, 'r') do |f| f.readlines.collect { |line| line.chomp } end
@@ -76,7 +77,10 @@ when 'remove'
 when 'clear'
   File.open(FILENAME, 'w') do |f| end
 when 'fixed'
-  issue = Issue.find(ARGV[0].to_i).change_status 3, ARGV[1]
+  id = ARGV[0].to_i
+  pushed_upstream = IO.popen("git log --grep \"BUG.*#{id}:\" --oneline origin/master") do |f| f.readlines.length > 0 end
+  puts "#{COLOR[:red]}WARNING#{COLOR[:clear]}: Change not pushed upstream. Don't forget again." unless pushed_upstream
+  issue = Issue.find(id).change_status 3, ARGV[1]
 when 'repro'
   issue = Issue.find(ARGV[0].to_i).change_status 1, ARGV[1]
 when 'later'
