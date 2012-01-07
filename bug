@@ -37,18 +37,7 @@ rescue Errno::ENOENT
   exit
 end
 
-class Issue < ActiveResource::Base
-  self.site = $config[:site]
-  self.user = $config[:user]
-  self.password = $config[:password]
-
-  def self.list
-    @@list if defined? @@list
-    @@list = Dir.entries(DIRECTORY)
-    2.times do @@list.shift end
-    @@list
-  end
-
+module FormattedStatus
   def formatted_status
     color = case status.name
       when 'New'
@@ -66,27 +55,88 @@ class Issue < ActiveResource::Base
     end
     "#{COLOR[color]}#{"%12s" % status.name}#{COLOR[:clear]}"
   end
+end
+
+class Issue < ActiveResource::Base
+  include FormattedStatus
+  self.site = $config[:site]
+  self.user = $config[:user]
+  self.password = $config[:password]
+
+  def self.list
+    return @@list if defined? @@list
+    @@list = Dir.entries(DIRECTORY)
+    2.times do @@list.shift end
+    @@list
+  end
 
   def change_status status_id, notes
     self.status_id = status_id
     self.notes = notes if notes
     self.save
+    serialize!
+  end
+
+  def self.load id
+    filename = "#{DIRECTORY}/#{id}"
+    return nil unless File.exists? filename
+    issue = Util.attributize YAML.load_file(filename)
+    class << issue
+      include FormattedStatus
+    end
+    issue
+  end
+
+  def serialize!
+    json = JSON.parse to_json
+    json = Util.fix_json json, 'issue'
+    File.open("#{DIRECTORY}/#{id}", 'w') do |f|
+      f.write(YAML.dump(json))
+    end
   end
 end
 
+module Util
+  def self.fix_json json, name
+    json = json[name]
+    json.keys.each do |key| json[key] = fix_json json[key], key if json[key].respond_to?(:has_key?) && json[key].has_key?(key) end
+    json
+  end
+
+  def self.attributize hash
+    return hash unless hash.is_a? Hash
+    hash.keys.each do |key|
+      (class << hash; self; end).class_eval do
+        define_method key.to_sym do
+          hash[key]
+        end
+      end
+      Util.attributize hash[key]
+    end
+    hash
+  end
+end
 
 case command
 when 'open'
   ARGV.each do |id| IO.popen("open #{Issue.site}/issues/#{id}") end
+when 'sync'
+  Issue.list.each do |id|
+    Issue.find(id.to_i, :params => { :include => 'journals' }).serialize!
+  end
 when 'status'
   Issue.list.each do |id|
-    issue = Issue.find(id.to_i, :params => { :include => 'journals' })
+    issue   = Issue.load(id.to_i)
+    issue ||= Issue.find(id.to_i, :params => { :include => 'journals' })
     puts "#{issue.id} #{"%2d" % issue.journals.length} #{"%6s" % issue.priority.name} #{issue.formatted_status} #{issue.subject}"
+    issue.serialize! if issue.respond_to? :serialize!
   end
 when 'add'
-  ARGV.reject { |id| Issue.list.include? id }.each { |id| File.new("#{DIRECTORY}/#{id}", 'w') }
+  ARGV.reject { |id| Issue.list.include? id }.each { |id| Issue.find(id.to_i).serialize! }
 when 'remove'
   ARGV.each { |id| File.delete("#{DIRECTORY}/#{id}") }
+when 'clean'
+  Issue.list.each { |id| File.delete("#{DIRECTORY}/#{id}") if Issue.load(id).status.name == 'Closed' }
 when 'clear'
   Issue.list.each { |id| File.delete("#{DIRECTORY}/#{id}") }
 when 'fixed'
