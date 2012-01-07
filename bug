@@ -99,7 +99,9 @@ end
 module Util
   def self.fix_json json, name
     json = json[name]
-    json.keys.each do |key| json[key] = fix_json json[key], key if json[key].respond_to?(:has_key?) && json[key].has_key?(key) end
+    json.keys.each do |key|
+      json[key] = fix_json json[key], key if json[key].respond_to?(:has_key?) && json[key].has_key?(key)
+    end
     json
   end
 
