@@ -124,7 +124,7 @@ end
 
 case command
 when 'open'
-  ARGV.each do |id| IO.popen("open #{Issue.site}/issues/#{id}") end
+  ARGV.each do |id| system("open #{Issue.site}/issues/#{id}") end
 when 'sync'
   (ARGV.empty?() ? Issue.list : ARGV).each do |id|
     Issue.find(id.to_i, :params => { :include => 'journals' }).serialize!
