@@ -14,6 +14,8 @@ COLOR = {
     :cyan => "\e[#36m"
     }
 
+PRIORITY = ['Low', 'Normal', 'High', 'Urgent']
+
 CONFIG_FILE = "#{Dir.home}/.bugsrc"
 DIRECTORY = "#{Dir.home}/.bugs"
 
@@ -123,14 +125,14 @@ case command
 when 'open'
   ARGV.each do |id| IO.popen("open #{Issue.site}/issues/#{id}") end
 when 'sync'
-  (ARGV || Issue.list).each do |id|
+  (ARGV.empty?() ? Issue.list : ARGV).each do |id|
     Issue.find(id.to_i, :params => { :include => 'journals' }).serialize!
   end
 when 'status'
   Issue.list.each do |id|
     issue   = Issue.load(id.to_i)
     issue ||= Issue.find(id.to_i, :params => { :include => 'journals' })
-    puts "#{issue.id} #{"%2d" % issue.journals.length} #{"%6s" % issue.priority.name} #{issue.formatted_status} #{issue.subject}"
+    puts "#{issue.id} #{"%2d" % (issue.respond_to?(:journals) ? issue.journals : []).length} #{"%6s" % issue.priority.name} #{issue.formatted_status} #{issue.subject}"
     issue.serialize! if issue.respond_to? :serialize!
   end
 when 'add'
