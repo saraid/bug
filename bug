@@ -64,6 +64,7 @@ class Issue < ActiveResource::Base
   self.site = $config[:site]
   self.user = $config[:user]
   self.password = $config[:password]
+  self.format = ActiveResource::Formats::XmlFormat
 
   def self.list
     return @@list if defined? @@list
