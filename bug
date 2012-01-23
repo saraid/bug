@@ -19,18 +19,8 @@ PRIORITY = ['Low', 'Normal', 'High', 'Urgent']
 CONFIG_FILE = "#{Dir.home}/.bugsrc"
 DIRECTORY = "#{Dir.home}/.bugs"
 
-# Migrate from .bugs file to .bugs directory.
-if File.exists?(DIRECTORY) && File.ftype(DIRECTORY) == 'file'
-  ids = File.open(DIRECTORY, 'r') do |f| f.readlines.collect { |line| line.chomp } end
-  File.delete DIRECTORY
-end
-Dir.mkdir DIRECTORY unless Dir.exist? DIRECTORY
-ids.each do |id|
-  File.new("#{DIRECTORY}/#{id}", 'w')
-end unless ids.nil?
-
 command = ARGV.shift
-File.open(CONFIG_FILE, 'w') do |f| f.write(YAML.dump({ :user => ARGV[0], :password => ARGV[1], :site => ARGV[2] })) end and exit if command == 'config'
+File.open(CONFIG_FILE, 'w') do |f| f.write(YAML.dump({ :user => ARGV[0], :password => ARGV[1], :site => ARGV[2], :user_id => ARGV[3] })) end and exit if command == 'config'
 
 $config = begin
   YAML.load_file(CONFIG_FILE)
@@ -172,14 +162,15 @@ end
 # - clean: Untrack all Closed bugs.
 
 # Bug-level commands:
-# - track / add: Serialize and add to status list.
-# - untrack / remove: Remove from status list.
+# - track / add: (List) Serialize and add to status list.
+# - untrack / remove: (List) Remove from status list.
 # - annotate / note: Add a personal note locally.
 # - edit: Edit the local personal note.
 # - categorize: Set a local categorization.
 # - fixed / nofix / repro / later / comment: Update server with new information.
 # - todo / enqueue: Add to local todo list.
 # - important / unimportant: Self-explanatory.
+# - ignore / unignore: Self-explanatory.
 # - open: Open the Redmine page.
 # - info / journals: Display all journals.
 
