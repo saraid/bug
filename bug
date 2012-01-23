@@ -66,11 +66,22 @@ class Issue < ActiveResource::Base
   self.password = $config[:password]
   self.format = ActiveResource::Formats::XmlFormat
 
+  def self.mine
+    issues = Issue.find(:all, :params => { :assigned_to_id => 18, :sort => 'priority:desc', :limit => 292 })
+    issues.each do |issue|
+      puts issue
+    end
+  end
+
   def self.list
     return @@list if defined? @@list
     @@list = Dir.entries(DIRECTORY)
     2.times do @@list.shift end
     @@list
+  end
+
+  def to_s
+    "#{self.id} #{"%2s" % (self.respond_to?(:journals) ? self.journals : []).length} #{"%6s" % self.priority.name} #{self.formatted_status} #{self.subject}"
   end
 
   def change_status status_id, notes
@@ -157,3 +168,14 @@ when 'later'
 when 'nofix'
   issue = Issue.find(ARGV[0].to_i).change_status 6, ARGV[1]
 end
+
+# Commands:
+# - fetch / pull / update: Get a new list from the server.
+# - track / add: Serialize and add to status list.
+# - untrack / remove: Serialize and add to status list.
+# - annotate / note: Add a personal note locally.
+# - fixed / nofix / repro / later / comment: Update server with new information.
+# - todo / enqueue: Add to local todo list.
+# - next?: Return with the next bug to fix.
+# - open: Open the Redmine page.
+# - info / journals: Display all journals.
