@@ -38,6 +38,7 @@ rescue Errno::ENOENT
   puts "You don't have a user/pass configured. Use \"bug config [user] [pass] [site]\""
   exit
 end
+$config[:user_id] = 18 unless $config[:user_id] # HACK FIXME
 
 module FormattedStatus
   def formatted_status
@@ -66,19 +67,11 @@ class Issue < ActiveResource::Base
   self.password = $config[:password]
   self.format = ActiveResource::Formats::XmlFormat
 
-  def self.mine
-    issues = Issue.find(:all, :params => { :assigned_to_id => 18, :sort => 'priority:desc', :limit => 292 })
-    issues.each do |issue|
-      puts issue
-    end
+  def initialize *args
+    super(*args)
+    @last_updated = Time.parse updated_on
   end
-
-  def self.list
-    return @@list if defined? @@list
-    @@list = Dir.entries(DIRECTORY)
-    2.times do @@list.shift end
-    @@list
-  end
+  attr_reader :last_updated
 
   def to_s
     "#{self.id} #{"%2s" % (self.respond_to?(:journals) ? self.journals : []).length} #{"%6s" % self.priority.name} #{self.formatted_status} #{self.subject}"
@@ -89,6 +82,10 @@ class Issue < ActiveResource::Base
     self.notes = notes if notes
     self.save
     serialize!
+  end
+
+  def self.fetch
+    Issue.find(:all, :params => { :assigned_to_id => 18, :sort => 'priority:desc', :include => 'journals' }).each do |issue| issue.serialize! end
   end
 
   def self.load id
@@ -157,25 +154,76 @@ when 'clean'
 when 'clear'
   Issue.list.each { |id| File.delete("#{DIRECTORY}/#{id}") }
 when 'fixed'
-  id = ARGV[0].to_i
-  pushed_upstream = IO.popen("git log --grep \"BUG.*#{id}:\" --oneline origin/master") do |f| f.readlines.length > 0 end
-  puts "#{COLOR[:red]}WARNING#{COLOR[:clear]}: Bug #{id} not pushed upstream. Don't forget again." unless pushed_upstream
-  issue = Issue.find(id).change_status 3, ARGV[1]
+  Issue.find(ARGV[0].to_i).fixed! ARGV[1]
 when 'repro'
-  issue = Issue.find(ARGV[0].to_i).change_status 1, ARGV[1]
+  Issue.find(ARGV[0].to_i).repro! ARGV[1]
 when 'later'
-  issue = Issue.find(ARGV[0].to_i).change_status 2, ARGV[1]
+  Issue.find(ARGV[0].to_i).later! ARGV[1]
 when 'nofix'
-  issue = Issue.find(ARGV[0].to_i).change_status 6, ARGV[1]
+  Issue.find(ARGV[0].to_i).nofix! ARGV[1]
 end
 
 # Commands:
 # - fetch / pull / update: Get a new list from the server.
+# - todo?: List all todo items, in todo priority.
+# - next?: Return with the next bug to fix.
+# - status: Self-explanatory.
+# - clear: Untrack all  bugs.
+# - clean: Untrack all Closed bugs.
+
+# Bug-level commands:
 # - track / add: Serialize and add to status list.
-# - untrack / remove: Serialize and add to status list.
+# - untrack / remove: Remove from status list.
 # - annotate / note: Add a personal note locally.
+# - edit: Edit the local personal note.
+# - categorize: Set a local categorization.
 # - fixed / nofix / repro / later / comment: Update server with new information.
 # - todo / enqueue: Add to local todo list.
-# - next?: Return with the next bug to fix.
+# - important / unimportant: Self-explanatory.
 # - open: Open the Redmine page.
 # - info / journals: Display all journals.
+
+# Todo List priority:
+# - Marked important locally.
+# - Enqueued to Todo List.
+# - Prioritized as Urgent / High.
+# - Marked  as Severe / Major.
+# - Most Journal entries.
+# - Most recently updated.
+
+class Issue
+  def track!
+  end
+
+  def untrack!
+  end
+
+  def annotate notes
+  end
+
+  def categorize category
+  end
+
+  def comment! notes
+    self.notes = notes
+    self.save
+  end
+
+  def fixed! notes
+    change_status 3, notes
+    pushed_upstream = IO.popen("git log --grep \"BUG.*#{id}:\" --oneline origin/master") do |f| f.readlines.length > 0 end
+    puts "#{COLOR[:red]}WARNING#{COLOR[:clear]}: Bug #{id} not pushed upstream. Don't forget again." unless pushed_upstream
+  end
+
+  def repro! notes
+    change_status 1, notes
+  end
+
+  def later! notes
+    change_status 2, notes
+  end
+
+  def nofix! notes
+    change_status 6, notes
+  end
+end
