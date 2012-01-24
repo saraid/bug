@@ -28,7 +28,9 @@ rescue Errno::ENOENT
   puts "You don't have a user/pass configured. Use \"bug config [user] [pass] [site]\""
   exit
 end
-$config[:user_id] = 18 unless $config[:user_id] # HACK FIXME
+$config[:user_id] ||= 18 # HACK FIXME
+
+EDITOR = $config[:editor] || 'vi'
 
 module FormattedStatus
   def formatted_status
@@ -59,7 +61,10 @@ class Issue < ActiveResource::Base
 
   def initialize *args
     super(*args)
+    ensure_tracked!
+
     @last_updated = Time.parse updated_on
+    configure({ :last_updated => last_updated, :priority => priority.name, :journal_length => respond_to?(:journals) ? journals : []).length })
   end
   attr_reader :last_updated
 
@@ -157,8 +162,9 @@ end
 # - fetch / pull / update: Get a new list from the server.
 # - todo?: List all todo items, in todo priority.
 # - next?: Return with the next bug to fix.
-# - status: Self-explanatory.
-# - clear: Untrack all  bugs.
+# - status: List of all tracked bugs, with summaries.
+# - filter / category: Same as status, except by category.
+# - clear: Untrack all bugs.
 # - clean: Untrack all Closed bugs.
 
 # Bug-level commands:
@@ -169,8 +175,8 @@ end
 # - categorize: Set a local categorization.
 # - fixed / nofix / repro / later / comment: Update server with new information.
 # - todo / enqueue: Add to local todo list.
-# - important / unimportant: Self-explanatory.
-# - ignore / unignore: Self-explanatory.
+# - important / unimportant: Located at top of status list.
+# - ignore / unignore: Ignored bugs are never Todo and located at the bottom of the status list.
 # - open: Open the Redmine page.
 # - info / journals: Display all journals.
 
@@ -183,16 +189,54 @@ end
 # - Most recently updated.
 
 class Issue
+  protected
+  def path file = nil
+    [DIRECTORY, id, file].compact.join('/')
+  end
+
+  def ensure_tracked!
+    Dir.mkdir path rescue Errno::EEXIST
+    system("touch #{path 'notes'}")
+    system("touch #{path 'meta'}")
+  end
+
+  def configure new_settings
+    ensure_tracked!
+    settings = YAML.load_file(path 'meta') || {}
+    settings.merge! new_settings
+    YAML.dump(settings)
+  end
+end
+
+class Issue
   def track!
+    configure({ :tracking => true })
   end
 
   def untrack!
+    configure({ :tracking => false })
   end
 
   def annotate notes
+    ensure_tracked!
+    File.open(path('notes'), 'a') do |f| f.puts(notes) end
   end
 
-  def categorize category
+  def edit!
+    ensure_tracked!
+    system("#{EDITOR} #{path 'notes'}")
+  end
+
+  def categorize! category
+    configure({ :category => category })
+  end
+
+  def important! toggle
+    configure({ :important => toggle })
+  end
+
+  def ignore! toggle
+    configure({ :ignore => toggle })
   end
 
   def comment! notes
