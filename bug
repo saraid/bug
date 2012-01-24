@@ -349,7 +349,7 @@ when 'open'
 when 'fetch', 'pull', 'update'
   Issue.fetch
 when 'todo?'
-  Issue.sorted.each { |issue| puts issue }
+  Issue.sorted.reject { |issue| issue.status.name == 'Resolved' }.each { |issue| puts issue }
 when 'next?'
   puts Issue.sorted.first
 when 'postpone'
