@@ -117,7 +117,7 @@ class Issue
         :assigned_to_id => $config[:user_id],
         :sort => 'priority:desc',
         :status_id => 'open' }).each do |issue|
-      issue.configure({ :journals_fetched => false })
+      #issue.configure({ :journals_fetched => false })
       puts issue
     end
   end
@@ -272,14 +272,14 @@ class Issue
 
   def track!
     configure({ :tracking => true })
-    unless @settings[:journals_fetched]
-      temp = Issue.find(id, :params => { :include => 'journals' })
-      if temp.respond_to? :journals
-        self.journals = temp.journals
-        self.serialize!
-      end
-      configure({ :journals_fetched => true })
-    end
+    #unless @settings[:journals_fetched]
+      #temp = Issue.find(id, :params => { :include => 'journals' })
+      #if temp.respond_to? :journals
+        #self.journals = temp.journals
+        #self.serialize!
+      #end
+      #configure({ :journals_fetched => true })
+    #end
   end
 
   def untrack!
