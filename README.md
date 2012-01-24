@@ -1,7 +1,6 @@
 Initialization
 
-* Start by running `bug config [user] [pass] [site] [user_id]`.
-** Your user id takes some HTML inspection to get. Kinda dumb. Hoping to come up with a better way.
+* Start by running `bug config [user] [pass] [site] [user_id]`. Your user id takes some HTML inspection to get. Kinda dumb. Hoping to come up with a better way.
 * Run `bug fetch` and `bug fetch latest`. This will set you up with the highest priority and most recent bugs.
 * Run `bug todo? | head -5` to see the most important bugs to tackle.
 * If you do not use `vi`, modify `~/.bugsrc` and change the editor.
