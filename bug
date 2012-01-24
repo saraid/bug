@@ -69,10 +69,11 @@ class Issue
     ensure_tracked!
 
     @last_updated = Time.parse updated_on
+    @creation_date = Time.parse created_on
     @settings = YAML.load_file(path 'meta') || {}
     serialize!
   end
-  attr_reader :last_updated
+  attr_reader :last_updated, :creation_date
 
   def change_status status_id, notes
     self.status_id = status_id
@@ -112,14 +113,19 @@ class Issue
     self.every.select { |issue| issue.category == cat }
   end
 
-  def self.fetch
-    Issue.find(:all, :params => {
+  def self.fetch latest
+    issues = Issue.find(:all, :params => {
         :assigned_to_id => $config[:user_id],
-        :sort => 'priority:desc',
+        :sort => latest ? 'created_on:desc' : 'priority:desc',
         :status_id => 'open' }).each do |issue|
       #issue.configure({ :journals_fetched => false })
+      break if latest && $config[:last_fetch] && issue.creation_date < $config[:last_fetch]
       puts issue
     end
+    $config[:last_fetch] = Time.now
+    File.open(CONFIG_FILE, 'w') do |f| f.write(YAML.dump($config)) end
+
+    puts "No new bugs." if issues.nil?
   end
 
   def self.load id
@@ -269,6 +275,18 @@ class Issue
     end
   end
 
+  def resolved?
+    ['Resolved', 'Closed', 'Will Not Fix'].include? status.name
+  end
+
+  def closed?
+    ['Closed', 'Will Not Fix'].include? status.name
+  end
+
+  def open?
+    ['New', 'In Progress'].include? status.name
+  end
+
   def track!
     configure({ :tracking => true })
     #unless @settings[:journals_fetched]
@@ -347,9 +365,9 @@ case command
 when 'open'
   ARGV.each do |id| system("open #{Issue.site}/issues/#{id}") end
 when 'fetch', 'pull', 'update'
-  Issue.fetch
+  Issue.fetch (ARGV[0] == 'latest')
 when 'todo?'
-  Issue.sorted.reject { |issue| issue.status.name == 'Resolved' }.each { |issue| puts issue }
+  Issue.sorted.reject { |issue| issue.resolved? }.each { |issue| puts issue }
 when 'next?'
   puts Issue.sorted.first
 when 'postpone'
@@ -365,8 +383,7 @@ when 'add', 'track'
 when 'remove', 'untrack'
   ARGV.each { |id| Issue.load(id).untrack! }
 when 'clean'
-  Issue.every.select { |issue| ['Will Not Fix', 'Closed'].include? issue.status.name }
-       .each { |issue| issue.uncache! }
+  Issue.every.select { |issue| issue.closed? }.each { |issue| issue.uncache! }
 when 'clear'
   Issue.every.each { |issue| issue.untrack! }
 when 'categorize'
