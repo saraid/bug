@@ -1,4 +1,5 @@
 Commands:
+
 *  fetch / pull / update: Get a new list from the server.
 *  todo?: List all todo items, in todo priority.
 *  next?: Return with the next bug to fix.
@@ -10,6 +11,7 @@ Commands:
 *  untrack / remove: (List) Remove from status list.
 
 Bug-level commands:
+
 *   annotate / note: Add a personal note locally.
 *   edit: Edit the local personal note.
 *   notes: View the local personal note.
@@ -24,6 +26,7 @@ Bug-level commands:
 *   info / journals: Display all journals.
 
 Todo List priority:
+
 * Marked important locally.
 * Enqueued to Todo List.
 * Prioritized as Urgent / High.
