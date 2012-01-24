@@ -1,4 +1,16 @@
-Commands (bug command arguments):
+Initialization
+
+* Start by running `bug config [user] [pass] [site] [user_id]`.
+** Your user id takes some HTML inspection to get. Kinda dumb. Hoping to come up with a better way.
+* Run `bug fetch` and `bug fetch latest`. This will set you up with the highest priority and most recent bugs.
+* Run `bug todo? | head -5` to see the most important bugs to tackle.
+* If you do not use `vi`, modify `~/.bugsrc` and change the editor.
+
+If you know a bug is important, mark it with `bug important ####`.
+If you know a bug is ignorable, mark it with `bug ignore ####`.
+If you want to know what to work on next, run `bug next?`
+
+Commands (`bug command argumentsi`):
 
 * fetch / pull / update [latest]: Get a new list from the server.
 * todo?: List all todo items, in todo priority.
@@ -10,7 +22,7 @@ Commands (bug command arguments):
 * track / add: (List) Serialize and add to status list.
 * untrack / remove: (List) Remove from status list.
 
-Bug-level commands (bug command bugid arguments):
+Bug-level commands (`bug command bugid arguments`):
 
 * annotate / note [note]: Add a personal note locally.
 * edit: Edit the local personal note.
