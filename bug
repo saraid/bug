@@ -19,6 +19,8 @@ PRIORITY = ['Low', 'Normal', 'High', 'Urgent']
 CONFIG_FILE = "#{Dir.home}/.bugsrc"
 DIRECTORY = "#{Dir.home}/.bugs"
 
+Dir.mkdir DIRECTORY rescue Errno::EEXIST
+
 command = ARGV.shift
 File.open(CONFIG_FILE, 'w') do |f| f.write(YAML.dump({ :user => ARGV[0], :password => ARGV[1], :site => ARGV[2], :user_id => ARGV[3] })) end and exit if command == 'config'
 
@@ -53,11 +55,14 @@ module FormattedStatus
 end
 
 class Issue < ActiveResource::Base
-  include FormattedStatus
   self.site = $config[:site]
   self.user = $config[:user]
   self.password = $config[:password]
   self.format = ActiveResource::Formats::XmlFormat
+end
+
+class Issue
+  include FormattedStatus
 
   def initialize *args
     super(*args)
@@ -65,40 +70,47 @@ class Issue < ActiveResource::Base
 
     @last_updated = Time.parse updated_on
     configure({ :last_updated => last_updated, :priority => priority.name, :journal_length => respond_to?(:journals) ? journals : []).length })
+    configure({ :subject => subject, :status => status.name, :id => id })
   end
   attr_reader :last_updated
-
-  def to_s
-    "#{self.id} #{"%2s" % (self.respond_to?(:journals) ? self.journals : []).length} #{"%6s" % self.priority.name} #{self.formatted_status} #{self.subject}"
-  end
 
   def change_status status_id, notes
     self.status_id = status_id
     self.notes = notes if notes
     self.save
-    serialize!
+  end
+
+  def to_s
+    "#{self.id} #{"%2s" % (self.respond_to?(:journals) ? self.journals : []).length} #{"%6s" % self.priority.name} #{self.formatted_status} #{self.subject}"
   end
 
   def self.fetch
-    Issue.find(:all, :params => { :assigned_to_id => 18, :sort => 'priority:desc', :include => 'journals' }).each do |issue| issue.serialize! end
+    Issue.find(:all, :params => { :assigned_to_id => 18, :sort => 'priority:desc', :include => 'journals' })
   end
 
-  def self.load id
-    filename = "#{DIRECTORY}/#{id}"
-    return nil unless File.exists? filename
-    issue = Util.attributize YAML.load_file(filename)
-    class << issue
-      include FormattedStatus
+  def self.destroy id
+    Dir.foreach("#{DIRECTORY}/#{id}") do |filename|
+      next if filename =~ /\./
+      File.delete(filename)
     end
-    issue
   end
 
-  def serialize!
-    json = JSON.parse to_json
-    json = Util.fix_json json, 'issue'
-    File.open("#{DIRECTORY}/#{id}", 'w') do |f|
-      f.write(YAML.dump(json))
-    end
+  protected
+  def path file = nil
+    [DIRECTORY, id, file].compact.join('/')
+  end
+
+  def ensure_tracked!
+    Dir.mkdir path rescue Errno::EEXIST
+    system("touch #{path 'notes'}")
+    system("touch #{path 'meta'}")
+  end
+
+  def configure new_settings
+    ensure_tracked!
+    settings = YAML.load_file(path 'meta') || {}
+    settings.merge! new_settings
+    YAML.dump(settings)
   end
 end
 
@@ -126,28 +138,41 @@ module Util
   end
 end
 
+class TodoList < Array
+  FILENAME = "#{Dir.home}/.bugs/.todo"
+
+  def initialize
+    system("touch #{FILENAME}")
+    File.open(FILENAME, 'r') { |f| (f.readlines.first || '').split(',') }.each do |id|
+      self << id
+    end
+  end
+
+  def <<(bug)
+    bug = bug.id if bug.is_a? Issue # ?
+    super(bug)
+    self.uniq!
+  end
+
+  def save!
+    File.open(FILENAME, 'w') do |f| f.write(self.join(',')) end
+  end
+end
+
 case command
 when 'open'
   ARGV.each do |id| system("open #{Issue.site}/issues/#{id}") end
-when 'sync'
-  (ARGV.empty?() ? Issue.list : ARGV).each do |id|
-    Issue.find(id.to_i, :params => { :include => 'journals' }).serialize!
-  end
+when 'fetch'
+  Issue.fetch
 when 'status'
-  Issue.list.each do |id|
-    issue   = Issue.load(id.to_i)
-    issue ||= Issue.find(id.to_i, :params => { :include => 'journals' })
-    puts "#{issue.id} #{"%2d" % (issue.respond_to?(:journals) ? issue.journals : []).length} #{"%6s" % issue.priority.name} #{issue.formatted_status} #{issue.subject}"
-    issue.serialize! if issue.respond_to? :serialize!
-  end
 when 'add'
-  ARGV.reject { |id| Issue.list.include? id }.each { |id| Issue.find(id.to_i).serialize! }
+  ARGV.each { |id| Issue.find(id) }
 when 'remove'
-  ARGV.each { |id| File.delete("#{DIRECTORY}/#{id}") }
+  ARGV.each { |id| Issue.destroy id }
 when 'clean'
-  Issue.list.each { |id| File.delete("#{DIRECTORY}/#{id}") if (Issue.load(id) || Issue.find(id)).status.name == 'Closed' }
+  #Issue.list.each { |id| File.delete("#{DIRECTORY}/#{id}") if (Issue.load(id) || Issue.find(id)).status.name == 'Closed' }
 when 'clear'
-  Issue.list.each { |id| File.delete("#{DIRECTORY}/#{id}") }
+  #Issue.list.each { |id| File.delete("#{DIRECTORY}/#{id}") }
 when 'fixed'
   Issue.find(ARGV[0].to_i).fixed! ARGV[1]
 when 'repro'
@@ -177,6 +202,7 @@ end
 # - todo / enqueue: Add to local todo list.
 # - important / unimportant: Located at top of status list.
 # - ignore / unignore: Ignored bugs are never Todo and located at the bottom of the status list.
+# - postpone: Push a bug downwards.
 # - open: Open the Redmine page.
 # - info / journals: Display all journals.
 
@@ -187,26 +213,6 @@ end
 # - Marked  as Severe / Major.
 # - Most Journal entries.
 # - Most recently updated.
-
-class Issue
-  protected
-  def path file = nil
-    [DIRECTORY, id, file].compact.join('/')
-  end
-
-  def ensure_tracked!
-    Dir.mkdir path rescue Errno::EEXIST
-    system("touch #{path 'notes'}")
-    system("touch #{path 'meta'}")
-  end
-
-  def configure new_settings
-    ensure_tracked!
-    settings = YAML.load_file(path 'meta') || {}
-    settings.merge! new_settings
-    YAML.dump(settings)
-  end
-end
 
 class Issue
   def track!
