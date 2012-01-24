@@ -254,7 +254,6 @@ end
 
 class Issue
   def todo_priority
-    p id
     priorities = []
     priorities << (@settings[:important] ? 1 : 0)
     priorities << (TodoList.to_a.include?(self.id) ? 1 : 0)
