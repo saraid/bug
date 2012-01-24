@@ -69,8 +69,9 @@ class Issue
     ensure_tracked!
 
     @last_updated = Time.parse updated_on
-    configure({ :last_updated => last_updated, :priority => priority.name, :journal_length => respond_to?(:journals) ? journals : []).length })
+    configure({ :last_updated => last_updated, :priority => priority.name, :journal_length => (respond_to?(:journals) ? journals : []).length })
     configure({ :subject => subject, :status => status.name, :id => id })
+    @settings = YAML.load_file(path 'meta') || {}
   end
   attr_reader :last_updated
 
@@ -96,6 +97,10 @@ class Issue
   end
 
   protected
+  def since_updated
+    Time.now - last_updated
+  end
+
   def path file = nil
     [DIRECTORY, id, file].compact.join('/')
   end
@@ -108,9 +113,9 @@ class Issue
 
   def configure new_settings
     ensure_tracked!
-    settings = YAML.load_file(path 'meta') || {}
-    settings.merge! new_settings
-    YAML.dump(settings)
+    @settings = YAML.load_file(path 'meta') || {}
+    @settings.merge! new_settings
+    File.open(path('meta'), 'w') do |f| f.write(YAML.dump(@settings)) end
   end
 end
 
@@ -140,6 +145,11 @@ end
 
 class TodoList < Array
   FILENAME = "#{Dir.home}/.bugs/.todo"
+
+  @@singleton = TodoList.new
+  def self.to_a
+    @@singleton
+  end
 
   def initialize
     system("touch #{FILENAME}")
@@ -191,10 +201,10 @@ end
 # - filter / category: Same as status, except by category.
 # - clear: Untrack all bugs.
 # - clean: Untrack all Closed bugs.
-
-# Bug-level commands:
 # - track / add: (List) Serialize and add to status list.
 # - untrack / remove: (List) Remove from status list.
+
+# Bug-level commands:
 # - annotate / note: Add a personal note locally.
 # - edit: Edit the local personal note.
 # - categorize: Set a local categorization.
@@ -215,6 +225,22 @@ end
 # - Most recently updated.
 
 class Issue
+  def todo_priority
+    priorities = []
+    priorities << (@settings[:important] ? 1 : 0)
+    priorities << (TodoList.to_a.include?(self.id) ? 1 : 0)
+    priorities << self.priority.id
+    #priorities << self.custom_fields.first.id # Severity
+    priorities << (respond_to?(:journals) ? self.journals : []).length
+    priorities << Math.log10(since_updated)
+
+    multiplier = 1
+    priorities.reverse.inject(0) do |memo, num|
+      multiplier *= 100
+      memo += num.to_f * multiplier
+    end
+  end
+
   def track!
     configure({ :tracking => true })
   end
