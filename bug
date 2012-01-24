@@ -69,9 +69,8 @@ class Issue
     ensure_tracked!
 
     @last_updated = Time.parse updated_on
-    configure({ :last_updated => last_updated, :priority => priority.name, :journal_length => (respond_to?(:journals) ? journals : []).length })
-    configure({ :subject => subject, :status => status.name, :id => id })
     @settings = YAML.load_file(path 'meta') || {}
+    serialize!
   end
   attr_reader :last_updated
 
@@ -81,19 +80,62 @@ class Issue
     self.save
   end
 
+  def uncache!
+    Dir.foreach(path) do |filename|
+      next if filename =~ /\./
+      File.delete(path filename) rescue Errno::ENOENT
+    end
+    Dir.delete path
+  end
+
+  def serialize!
+    File.open(path('xml'), 'w') do |f| f.write(to_xml) end
+  end
+
   def to_s
-    "#{self.id} #{"%2s" % (self.respond_to?(:journals) ? self.journals : []).length} #{"%6s" % self.priority.name} #{self.formatted_status} #{self.subject}"
+    "#{self.id} #{"%6s" % self.priority.name} #{self.formatted_status} #{self.subject}"
+  end
+
+  def self.every
+    Dir.entries(DIRECTORY).reject { |id| id =~ /\./ }.collect { |id| Issue.load(id) }
+  end
+
+  def self.sorted
+    self.every.sort { |a, b| b.todo_priority <=> a.todo_priority }
+  end
+
+  def self.tracked
+    self.every.select { |issue| issue.tracking? }
+  end
+
+  def self.category(cat)
+    self.every.select { |issue| issue.category == cat }
   end
 
   def self.fetch
-    Issue.find(:all, :params => { :assigned_to_id => 18, :sort => 'priority:desc', :include => 'journals' })
+    Issue.find(:all, :params => {
+        :assigned_to_id => $config[:user_id],
+        :sort => 'priority:desc',
+        :status_id => 'open' }).each do |issue|
+      issue.configure({ :journals_fetched => false })
+      puts issue
+    end
   end
 
-  def self.destroy id
-    Dir.foreach("#{DIRECTORY}/#{id}") do |filename|
-      next if filename =~ /\./
-      File.delete(filename)
+  def self.load id
+    id = id.to_i
+    begin
+      new(self.format.decode(File.open([DIRECTORY, id, 'xml'].join('/'), 'r') do |f| f.readlines.join end))
+    rescue Errno::ENOENT
+      self.find(id)
     end
+  end
+
+  def configure new_settings
+    ensure_tracked!
+    @settings = YAML.load_file(path 'meta') || {}
+    @settings.merge! new_settings
+    File.open(path('meta'), 'w') do |f| f.write(YAML.dump(@settings)) end
   end
 
   protected
@@ -111,11 +153,13 @@ class Issue
     system("touch #{path 'meta'}")
   end
 
-  def configure new_settings
-    ensure_tracked!
-    @settings = YAML.load_file(path 'meta') || {}
-    @settings.merge! new_settings
-    File.open(path('meta'), 'w') do |f| f.write(YAML.dump(@settings)) end
+  private
+  def method_missing id, *args, &block
+    if id == :journals
+      return journals if respond_to? :journals
+      return [] if id == :journals
+    end
+    super(id, *args, &block)
   end
 end
 
@@ -162,35 +206,17 @@ class TodoList < Array
     bug = bug.id if bug.is_a? Issue # ?
     super(bug)
     self.uniq!
+    self.save!
+  end
+
+  def delete(bug)
+    super(bug)
+    self.save!
   end
 
   def save!
     File.open(FILENAME, 'w') do |f| f.write(self.join(',')) end
   end
-end
-
-case command
-when 'open'
-  ARGV.each do |id| system("open #{Issue.site}/issues/#{id}") end
-when 'fetch'
-  Issue.fetch
-when 'status'
-when 'add'
-  ARGV.each { |id| Issue.find(id) }
-when 'remove'
-  ARGV.each { |id| Issue.destroy id }
-when 'clean'
-  #Issue.list.each { |id| File.delete("#{DIRECTORY}/#{id}") if (Issue.load(id) || Issue.find(id)).status.name == 'Closed' }
-when 'clear'
-  #Issue.list.each { |id| File.delete("#{DIRECTORY}/#{id}") }
-when 'fixed'
-  Issue.find(ARGV[0].to_i).fixed! ARGV[1]
-when 'repro'
-  Issue.find(ARGV[0].to_i).repro! ARGV[1]
-when 'later'
-  Issue.find(ARGV[0].to_i).later! ARGV[1]
-when 'nofix'
-  Issue.find(ARGV[0].to_i).nofix! ARGV[1]
 end
 
 # Commands:
@@ -207,9 +233,11 @@ end
 # Bug-level commands:
 # - annotate / note: Add a personal note locally.
 # - edit: Edit the local personal note.
+# - notes: View the local personal note.
 # - categorize: Set a local categorization.
 # - fixed / nofix / repro / later / comment: Update server with new information.
 # - todo / enqueue: Add to local todo list.
+# - dequeue: Remove from local todo list.
 # - important / unimportant: Located at top of status list.
 # - ignore / unignore: Ignored bugs are never Todo and located at the bottom of the status list.
 # - postpone: Push a bug downwards.
@@ -226,12 +254,13 @@ end
 
 class Issue
   def todo_priority
+    p id
     priorities = []
     priorities << (@settings[:important] ? 1 : 0)
     priorities << (TodoList.to_a.include?(self.id) ? 1 : 0)
     priorities << self.priority.id
     #priorities << self.custom_fields.first.id # Severity
-    priorities << (respond_to?(:journals) ? self.journals : []).length
+    priorities << @settings[:journal_length]
     priorities << Math.log10(since_updated)
 
     multiplier = 1
@@ -243,10 +272,22 @@ class Issue
 
   def track!
     configure({ :tracking => true })
+    unless @settings[:journals_fetched]
+      temp = Issue.find(id, :params => { :include => 'journals' })
+      if temp.respond_to? :journals
+        self.journals = temp.journals
+        self.serialize!
+      end
+      configure({ :journals_fetched => true })
+    end
   end
 
   def untrack!
     configure({ :tracking => false })
+  end
+
+  def tracking?
+    @settings[:tracking]
   end
 
   def annotate notes
@@ -259,8 +300,16 @@ class Issue
     system("#{EDITOR} #{path 'notes'}")
   end
 
+  def notes
+    File.open(path('notes'), 'r') do |f| f.readlines.join end
+  end
+
   def categorize! category
     configure({ :category => category })
+  end
+
+  def category
+    @settings[:category]
   end
 
   def important! toggle
@@ -293,4 +342,50 @@ class Issue
   def nofix! notes
     change_status 6, notes
   end
+end
+
+case command
+when 'open'
+  ARGV.each do |id| system("open #{Issue.site}/issues/#{id}") end
+when 'fetch', 'pull', 'update'
+  Issue.fetch
+when 'todo?'
+  Issue.sorted.each { |issue| puts issue }
+when 'next?'
+  puts Issue.sorted.first
+when 'postpone'
+  puts Issue.sorted[1]
+when 'todo', 'enqueue'
+  ARGV.each { |id| TodoList.to_a << id }
+when 'dequeue'
+  ARGV.each { |id| TodoList.to_a.delete id }
+when 'status'
+  Issue.tracked.each { |issue| puts issue }
+when 'add', 'track'
+  ARGV.each { |id| Issue.load(id).track! }
+when 'remove', 'untrack'
+  ARGV.each { |id| Issue.load(id).untrack! }
+when 'clean'
+  Issue.every.select { |issue| ['Will Not Fix', 'Closed'].include? issue.status.name }
+       .each { |issue| issue.uncache! }
+when 'clear'
+  Issue.every.each { |issue| issue.untrack! }
+when 'categorize'
+  Issue.load(ARGV[0]).categorize! ARGV[1]
+when 'category', 'filter'
+  Issue.category(ARGV[0]).each { |issue| puts issue }
+when 'annotate', 'note'
+  Issue.load(ARGV[0]).annotate ARGV[1]
+when 'edit'
+  Issue.load(ARGV[0]).edit!
+when 'notes'
+  puts Issue.load(ARGV[0]).notes
+when 'fixed', 'repro', 'later', 'nofix', 'comment'
+  Issue.load(ARGV[0]).send :"#{command}!", ARGV[1]
+when 'important', 'unimportant'
+  Issue.load(ARGV[0]).important! !(command =~ /^un/)
+when 'ignore', 'unignore'
+  Issue.load(ARGV[0]).ignore! !(command =~ /^un/)
+#when 'info', 'journals'
+  #Issue.load(ARGV[0]).journals.each do |journal| puts journal.notes end
 end
