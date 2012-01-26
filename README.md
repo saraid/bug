@@ -9,7 +9,7 @@ If you know a bug is important, mark it with `bug important ####`.
 If you know a bug is ignorable, mark it with `bug ignore ####`.
 If you want to know what to work on next, run `bug next?`
 
-Commands (`bug command argumentsi`):
+Commands (`bug command arguments`):
 
 * fetch / pull [latest]: Get a new list from the server. Defaults to priority sort. [latest] uses created_on.
 * update: Get a new list by updated_on from the server.
