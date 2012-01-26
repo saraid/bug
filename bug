@@ -113,19 +113,32 @@ class Issue
     self.every.select { |issue| issue.category == cat }
   end
 
-  def self.fetch latest
-    issues = Issue.find(:all, :params => {
+  def self.fetch sort_type
+    issues_found = false
+    Issue.find(:all, :params => {
         :assigned_to_id => $config[:user_id],
-        :sort => latest ? 'created_on:desc' : 'priority:desc',
+        :sort => case sort_type
+            when 'priority'
+              'priority:desc'
+            when 'latest'
+              'created_on:desc'
+            when 'updated'
+              'updated_on:desc'
+            else
+              'priority:desc'
+          end,
         :status_id => 'open' }).each do |issue|
       #issue.configure({ :journals_fetched => false })
-      break if latest && $config[:last_fetch] && issue.creation_date < $config[:last_fetch]
+      break if (sort_type == 'latest' && $config[:last_fetch] && issue.creation_date < $config[:last_fetch]) || 
+               (sort_type == 'updated' && $config[:last_update] && issue.last_updated < $config[:last_update])
+      issues_found = true
       puts issue
     end
-    $config[:last_fetch] = Time.now
+    $config[:last_fetch] = Time.now if sort_type == 'latest'
+    $config[:last_update] = Time.now if sort_type == 'updated'
     File.open(CONFIG_FILE, 'w') do |f| f.write(YAML.dump($config)) end
 
-    puts "No new bugs." if issues.nil?
+    puts "No new bugs." unless issues_found
   end
 
   def self.load id
@@ -364,8 +377,10 @@ end
 case command
 when 'open'
   ARGV.each do |id| system("open #{Issue.site}/issues/#{id}") end
-when 'fetch', 'pull', 'update'
-  Issue.fetch (ARGV[0] == 'latest')
+when 'fetch', 'pull'
+  Issue.fetch (ARGV[0] || 'priority')
+when 'update'
+  Issue.fetch 'updated'
 when 'todo?'
   Issue.sorted.reject { |issue| issue.resolved? }.each { |issue| puts issue }
 when 'next?'

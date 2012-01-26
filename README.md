@@ -11,7 +11,8 @@ If you want to know what to work on next, run `bug next?`
 
 Commands (`bug command argumentsi`):
 
-* fetch / pull / update [latest]: Get a new list from the server.
+* fetch / pull [latest]: Get a new list from the server. Defaults to priority sort. [latest] uses created_on.
+* update: Get a new list by updated_on from the server.
 * todo?: List all todo items, in todo priority.
 * next?: Return with the next bug to fix.
 * status: List of all tracked bugs, with summaries.
