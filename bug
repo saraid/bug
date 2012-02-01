@@ -79,6 +79,7 @@ class Issue
     self.status_id = status_id
     self.notes = notes if notes
     self.save
+    serialize!
   end
 
   def uncache!
@@ -372,6 +373,12 @@ class Issue
   def nofix! notes
     change_status 6, notes
   end
+
+  def own!
+    self.assigned_to_id = $config[:user_id]
+    self.save
+    serialize!
+  end
 end
 
 case command
@@ -384,7 +391,7 @@ when 'update'
 when 'todo?'
   Issue.sorted.reject { |issue| issue.resolved? }.each { |issue| puts issue }
 when 'next?'
-  puts Issue.sorted.first
+  puts Issue.sorted.reject { |issue| issue.resolved? }.first
 when 'postpone'
   puts Issue.sorted[1]
 when 'todo', 'enqueue'
@@ -393,6 +400,8 @@ when 'dequeue'
   ARGV.each { |id| TodoList.to_a.delete id }
 when 'status'
   Issue.tracked.each { |issue| puts issue }
+when 'mine'
+  Issue.load(ARGV[0]).own!
 when 'add', 'track'
   ARGV.each { |id| Issue.load(id).track! }
 when 'remove', 'untrack'
@@ -409,8 +418,10 @@ when 'annotate', 'note'
   Issue.load(ARGV[0]).annotate ARGV[1]
 when 'edit'
   Issue.load(ARGV[0]).edit!
-when 'notes'
-  puts Issue.load(ARGV[0]).notes
+when 'notes', 'show'
+  issue = Issue.load(ARGV[0])
+  puts "#{COLOR[:yellow]}#{issue.id} - #{issue.subject}#{COLOR[:clear]}"
+  puts "\n#{issue.notes}".gsub(/\n/, "\n    ")
 when 'fixed', 'repro', 'later', 'nofix', 'comment'
   Issue.load(ARGV[0]).send :"#{command}!", ARGV[1]
 when 'important', 'unimportant'
