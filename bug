@@ -363,7 +363,7 @@ class Issue
   end
 
   def repro! notes
-    change_status 1, notes
+    change_status 4, notes
   end
 
   def later! notes
