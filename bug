@@ -422,6 +422,9 @@ when 'edit'
 when 'notes', 'show'
   issue = Issue.load(ARGV[0])
   puts "#{COLOR[:yellow]}#{issue.id} - #{issue.subject}#{COLOR[:clear]}"
+  print "\n  Description:"
+  puts "\n#{issue.description}".gsub(/\n/, "\n    ")
+  print "\n  Notes:"
   puts "\n#{issue.notes}".gsub(/\n/, "\n    ")
 when 'fixed', 'repro', 'later', 'nofix', 'comment'
   Issue.load(ARGV[0]).send :"#{command}!", ARGV[1]
