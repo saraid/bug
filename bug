@@ -407,7 +407,8 @@ when 'add', 'track'
 when 'remove', 'untrack'
   ARGV.each { |id| Issue.load(id).untrack! }
 when 'clean'
-  Issue.every.select { |issue| issue.closed? }.each { |issue| issue.uncache! }
+  Issue.every.select { |issue| (ARGV[0] == 'resolved' && issue.resolved?) || issue.closed? }
+       .each { |issue| issue.uncache! }
 when 'clear'
   Issue.every.each { |issue| issue.untrack! }
 when 'categorize'
