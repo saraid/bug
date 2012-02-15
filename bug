@@ -358,7 +358,7 @@ class Issue
 
   def fixed! notes
     change_status 3, notes
-    pushed_upstream = IO.popen("git log --grep \"BUG.*#{id}:\" --oneline origin/master") do |f| f.readlines.length > 0 end
+    pushed_upstream = IO.popen("git log --grep \"BUG.*#{id}\" --oneline origin/master") do |f| f.readlines.length > 0 end
     puts "#{COLOR[:red]}WARNING#{COLOR[:clear]}: Bug #{id} not pushed upstream. Don't forget again." unless pushed_upstream
   end
 
