@@ -424,8 +424,10 @@ when 'notes', 'show'
   puts "#{COLOR[:yellow]}#{issue.id} - #{issue.subject}#{COLOR[:clear]}"
   print "\n  Description:"
   puts "\n#{issue.description}".gsub(/\n/, "\n    ")
-  print "\n  Notes:"
-  puts "\n#{issue.notes}".gsub(/\n/, "\n    ")
+  unless issue.notes.blank?
+    print "\n  Notes:"
+    puts "\n#{issue.notes}".gsub(/\n/, "\n    ")
+  end
 when 'fixed', 'repro', 'later', 'nofix', 'comment'
   Issue.load(ARGV[0]).send :"#{command}!", ARGV[1]
 when 'important', 'unimportant'
