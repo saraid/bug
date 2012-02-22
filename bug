@@ -452,6 +452,11 @@ when 'ignore', 'unignore'
   Issue.load(ARGV[0]).ignore! !(command =~ /^un/)
 when 'ie'
   ARGV[0] ? Issue.load(ARGV[0]).ie_bug! : Issue.every.select { |issue| issue.ie_bug? }.each { |issue| puts issue }
+when 'sync'
+  ARGV.collect { |id| Issue.find(ARGV[0]) }.each { |issue|
+    issue.serialize!
+    puts issue
+  }
 #when 'info', 'journals'
   #Issue.load(ARGV[0]).journals.each do |journal| puts journal.notes end
 end
