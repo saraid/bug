@@ -11,7 +11,8 @@ COLOR = {
     :yellow => "\e[#33m",
     :blue => "\e[#34m",
     :magenta => "\e[#35m",
-    :cyan => "\e[#36m"
+    :cyan => "\e[#36m",
+    :white => "\e[#37m"
     }
 
 PRIORITY = ['Low', 'Normal', 'High', 'Urgent']
@@ -95,7 +96,14 @@ class Issue
   end
 
   def to_s
-    "#{self.id} #{"%6s" % self.priority.name} #{self.formatted_status} #{self.subject}"
+    "#{self.id} #{"%6s" % self.priority.name} #{self.formatted_status} #{self.subject.chop} #{self.tags}"
+  end
+
+  def tags
+    tags = []
+    tags << "[IE]" if ie_bug?
+    tags << "[ignoring]" if @settings[:ignore]
+    tags.join ' '
   end
 
   def self.every
@@ -343,6 +351,14 @@ class Issue
     @settings[:category]
   end
 
+  def ie_bug!
+    configure({ :ie_bug => true })
+  end
+
+  def ie_bug?
+    @settings[:ie_bug]
+  end
+
   def important! toggle
     configure({ :important => toggle })
   end
@@ -434,6 +450,8 @@ when 'important', 'unimportant'
   Issue.load(ARGV[0]).important! !(command =~ /^un/)
 when 'ignore', 'unignore'
   Issue.load(ARGV[0]).ignore! !(command =~ /^un/)
+when 'ie'
+  ARGV[0] ? Issue.load(ARGV[0]).ie_bug! : Issue.every.select { |issue| issue.ie_bug? }.each { |issue| puts issue }
 #when 'info', 'journals'
   #Issue.load(ARGV[0]).journals.each do |journal| puts journal.notes end
 end
