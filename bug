@@ -153,7 +153,7 @@ class Issue
   def self.load id
     id = id.to_i
     begin
-      new(self.format.decode(File.open([DIRECTORY, id, 'xml'].join('/'), 'r') do |f| f.readlines.join end))
+      new(self.format.decode(File.open([DIRECTORY, id, 'xml'].join('/'), 'r') do |f| f.readlines.join end), true)
     rescue Errno::ENOENT
       self.find(id)
     end
