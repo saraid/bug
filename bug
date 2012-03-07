@@ -96,7 +96,7 @@ class Issue
   end
 
   def to_s
-    "#{self.id} #{"%6s" % self.priority.name} #{self.formatted_status} #{self.subject.chop} #{self.tags}"
+    "#{self.id} #{"%6s" % self.priority.name} #{self.formatted_status} #{self.subject.strip} #{self.tags}"
   end
 
   def tags
