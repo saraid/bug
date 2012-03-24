@@ -439,7 +439,7 @@ when 'notes', 'show'
   issue = Issue.load(ARGV[0])
   puts "#{COLOR[:yellow]}#{issue.id} - #{issue.subject}#{COLOR[:clear]}"
   print "\n  Description:"
-  puts "\n#{issue.description}".gsub(/\n/, "\n    ")
+  puts "\n#{issue.description}".gsub(/\n\n/, "\n").gsub(/\n/, "\n    ")
   unless issue.notes.blank?
     print "\n  Notes:"
     puts "\n#{issue.notes}".gsub(/\n/, "\n    ")
