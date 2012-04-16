@@ -15,7 +15,12 @@ COLOR = {
     :white => "\e[#37m"
     }
 
-PRIORITY = ['Low', 'Normal', 'High', 'Urgent']
+PRIORITY = {
+    :low => 3,
+    :normal => 4,
+    :high => 5,
+    :urgent => 6
+    }
 
 CONFIG_FILE = "#{Dir.home}/.bugsrc"
 DIRECTORY = "#{Dir.home}/.bugs"
@@ -78,6 +83,13 @@ class Issue
 
   def change_status status_id, notes
     self.status_id = status_id
+    self.notes = notes if notes
+    self.save
+    serialize!
+  end
+
+  def change_priority priority_id, notes
+    self.priority_id = priority_id
     self.notes = notes if notes
     self.save
     serialize!
@@ -390,6 +402,18 @@ class Issue
     change_status 6, notes
   end
 
+  def low! notes
+    change_priority PRIORITY[:low], notes
+  end
+
+  def normal! notes
+    change_priority PRIORITY[:normal], notes
+  end
+
+  def high! notes
+    change_priority PRIORITY[:high], notes
+  end
+
   def own!
     self.assigned_to_id = $config[:user_id]
     self.save
@@ -444,7 +468,7 @@ when 'notes', 'show'
     print "\n  Notes:"
     puts "\n#{issue.notes}".gsub(/\n/, "\n    ")
   end
-when 'fixed', 'repro', 'later', 'nofix', 'comment'
+when 'fixed', 'repro', 'later', 'nofix', 'comment', 'low', 'normal', 'high'
   Issue.load(ARGV[0]).send :"#{command}!", ARGV[1]
 when 'important', 'unimportant'
   Issue.load(ARGV[0]).important! !(command =~ /^un/)
