@@ -22,6 +22,13 @@ PRIORITY = {
     :urgent => 6
     }
 
+STATUS = {
+    :in_progress => 2,
+    :resolved => 3,
+    :needs_repro => 4,
+    :wontfix => 6
+    }
+
 CONFIG_FILE = "#{Dir.home}/.bugsrc"
 DIRECTORY = "#{Dir.home}/.bugs"
 
@@ -82,6 +89,7 @@ class Issue
   attr_reader :last_updated, :creation_date
 
   def change_status status_id, notes
+    puts "Marking Bug ##{self.id} (#{self.subject}) as #{STATUS.invert[status_id].to_s.split('_').collect { |x| x.capitalize }.join(' ')}."
     self.status_id = status_id
     self.notes = notes if notes
     self.save
@@ -385,21 +393,21 @@ class Issue
   end
 
   def fixed! notes
-    change_status 3, notes
+    change_status STATUS[:resolved], notes
     pushed_upstream = IO.popen("git log --grep \"BUG.*#{id}\" --oneline origin/master") do |f| f.readlines.length > 0 end
     puts "#{COLOR[:red]}WARNING#{COLOR[:clear]}: Bug #{id} not pushed upstream. Don't forget again." unless pushed_upstream
   end
 
   def repro! notes
-    change_status 4, notes
+    change_status STATUS[:needs_repro], notes
   end
 
   def later! notes
-    change_status 2, notes
+    change_status STATUS[:in_progress], notes
   end
 
   def nofix! notes
-    change_status 6, notes
+    change_status STATUS[:wontfix], notes
   end
 
   def low! notes
