@@ -115,8 +115,7 @@ class Issue
     serialize!
   end
 
-  def log_time options = {}
-    raise 'TimeEntry requires hours' unless options.has_key? :hours
+  def log_time hours, options = {}
     te = TimeEntry.new
     te.updated_on = te.created_on = Time.now
     if options.has_key? :activity
@@ -125,9 +124,9 @@ class Issue
       te.activity_id = ACTIVITY[:development]
     end
     te.issue_id = self.id
-    te.hours = options[:hours]
+    te.hours = hours
     te.comment = options[:comment] if options.has_key? :comment
-    te.save
+    te.save rescue NameError
     puts "Logged #{te.hours} #{options[:activity] || 'development'} hours to issue #{self.id}"
   end
 
@@ -517,6 +516,9 @@ when 'sync'
     issue.serialize!
     puts issue
   }
+when 'log'
+  issue = Issue.load(ARGV[0])
+  issue.log_time ARGV[1].to_i
 #when 'info', 'journals'
   #Issue.load(ARGV[0]).journals.each do |journal| puts journal.notes end
 end
