@@ -29,6 +29,11 @@ STATUS = {
     :wontfix => 6
     }
 
+ACTIVITY = {
+    :design => 12,
+    :development => 13
+}
+
 CONFIG_FILE = "#{Dir.home}/.bugsrc"
 DIRECTORY = "#{Dir.home}/.bugs"
 
@@ -74,6 +79,13 @@ class Issue < ActiveResource::Base
   self.format = ActiveResource::Formats::XmlFormat
 end
 
+class TimeEntry < ActiveResource::Base
+  self.site = $config[:site]
+  self.user = $config[:user]
+  self.password = $config[:password]
+  self.format = ActiveResource::Formats::XmlFormat
+end
+
 class Issue
   include FormattedStatus
 
@@ -101,6 +113,22 @@ class Issue
     self.notes = notes if notes
     self.save
     serialize!
+  end
+
+  def log_time options = {}
+    raise 'TimeEntry requires hours' unless options.has_key? :hours
+    te = TimeEntry.new
+    te.updated_on = te.created_on = Time.now
+    if options.has_key? :activity
+      te.activity_id = ACTIVITY[options[:activity]]
+    else
+      te.activity_id = ACTIVITY[:development]
+    end
+    te.issue_id = self.id
+    te.hours = options[:hours]
+    te.comment = options[:comment] if options.has_key? :comment
+    te.save
+    puts "Logged #{te.hours} #{options[:activity] || 'development'} hours to issue #{self.id}"
   end
 
   def uncache!
