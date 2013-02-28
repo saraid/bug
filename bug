@@ -100,17 +100,24 @@ class Issue
   end
   attr_reader :last_updated, :creation_date
 
-  def change_status status_id, notes
+  def change_status status_id, notes, hours
     puts "Marking Bug ##{self.id} (#{self.subject}) as #{STATUS.invert[status_id].to_s.split('_').collect { |x| x.capitalize }.join(' ')}."
     self.status_id = status_id
     self.notes = notes if notes
     self.save
+    self.log_time hours if hours
     serialize!
   end
 
   def change_priority priority_id, notes
     self.priority_id = priority_id
     self.notes = notes if notes
+    self.save
+    serialize!
+  end
+
+  def estimate_hours hours
+    self.attributes['estimated_hours'] = hours
     self.save
     serialize!
   end
@@ -419,34 +426,34 @@ class Issue
     self.save
   end
 
-  def fixed! notes
-    change_status STATUS[:resolved], notes
+  def fixed! notes, hours = nil
+    change_status STATUS[:resolved], notes, hours
     pushed_upstream = IO.popen("git log --grep \"BUG.*#{id}\" --oneline origin/master") do |f| f.readlines.length > 0 end
     puts "#{COLOR[:red]}WARNING#{COLOR[:clear]}: Bug #{id} not pushed upstream. Don't forget again." unless pushed_upstream
   end
 
-  def repro! notes
-    change_status STATUS[:needs_repro], notes
+  def repro! notes, hours = nil
+    change_status STATUS[:needs_repro], notes, hours
   end
 
-  def later! notes
-    change_status STATUS[:in_progress], notes
+  def later! notes, hours = nil
+    change_status STATUS[:in_progress], notes, hours
   end
 
-  def nofix! notes
-    change_status STATUS[:wontfix], notes
+  def nofix! notes, hours = nil
+    change_status STATUS[:wontfix], notes, hours
   end
 
-  def low! notes
-    change_priority PRIORITY[:low], notes
+  def low! notes, hours = nil
+    change_priority PRIORITY[:low], notes, hours
   end
 
-  def normal! notes
-    change_priority PRIORITY[:normal], notes
+  def normal! notes, hours = nil
+    change_priority PRIORITY[:normal], notes, hours
   end
 
-  def high! notes
-    change_priority PRIORITY[:high], notes
+  def high! notes, hours = nil
+    change_priority PRIORITY[:high], notes, hours
   end
 
   def own!
@@ -504,7 +511,7 @@ when 'notes', 'show'
     puts "\n#{issue.notes}".gsub(/\n/, "\n    ")
   end
 when 'fixed', 'repro', 'later', 'nofix', 'comment', 'low', 'normal', 'high'
-  Issue.load(ARGV[0]).send :"#{command}!", ARGV[1]
+  Issue.load(ARGV[0]).send(:"#{command}!", ARGV[1], ARGV[2])
 when 'important', 'unimportant'
   Issue.load(ARGV[0]).important! !(command =~ /^un/)
 when 'ignore', 'unignore'
