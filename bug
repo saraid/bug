@@ -427,6 +427,10 @@ class Issue
   end
 
   def fixed! notes, hours = nil
+    if notes.to_i > 0
+      hours = notes
+      notes = nil
+    end
     change_status STATUS[:resolved], notes, hours
     pushed_upstream = IO.popen("git log --grep \"BUG.*#{id}\" --oneline origin/master") do |f| f.readlines.length > 0 end
     puts "#{COLOR[:red]}WARNING#{COLOR[:clear]}: Bug #{id} not pushed upstream. Don't forget again." unless pushed_upstream
