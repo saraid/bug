@@ -72,18 +72,20 @@ module FormattedStatus
   end
 end
 
-class Issue < ActiveResource::Base
+class BaseResource < ActiveResource::Base
   self.site = $config[:site]
   self.user = $config[:user]
   self.password = $config[:password]
   self.format = ActiveResource::Formats::XmlFormat
 end
 
-class TimeEntry < ActiveResource::Base
-  self.site = $config[:site]
-  self.user = $config[:user]
-  self.password = $config[:password]
-  self.format = ActiveResource::Formats::XmlFormat
+class Issue < BaseResource; end
+class TimeEntry < BaseResource; end
+
+class TimeEntry
+  def hours
+    attributes['hours']
+  end
 end
 
 class Issue
@@ -93,8 +95,8 @@ class Issue
     super(*args)
     ensure_tracked!
 
-    @last_updated = Time.parse updated_on
-    @creation_date = Time.parse created_on
+    @last_updated = Time.parse updated_on rescue NameError
+    @creation_date = Time.parse created_on rescue NameError
     @settings = YAML.load_file(path 'meta') || {}
     serialize!
   end
